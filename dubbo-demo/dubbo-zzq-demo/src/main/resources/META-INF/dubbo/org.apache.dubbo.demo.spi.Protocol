@@ -1,0 +1,2 @@
+myProtocol = org.apache.dubbo.demo.spi.MyProtocol
+org.apache.dubbo.demo.spi.XxxProtocolWrapper

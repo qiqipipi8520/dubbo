@@ -64,6 +64,7 @@ public class ConfigurableMetadataServiceExporter implements MetadataServiceExpor
     @Override
     public ConfigurableMetadataServiceExporter export() {
 
+        //是否已导出
         if (!isExported()) {
 
             ServiceConfig<MetadataService> serviceConfig = new ServiceConfig<>();

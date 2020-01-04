@@ -1,0 +1,3 @@
+dubbo=org.apache.dubbo.demo.spi.DubboAdaptiveExtImpl
+spring=org.apache.dubbo.demo.spi.SpringAdaptiveExtImpl
+springboot=org.apache.dubbo.demo.spi.SpringBootAdaptiveExtImpl

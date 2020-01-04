@@ -119,6 +119,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
     /**
      * A {@link ProxyFactory} implementation that will generate a exported service proxy,the JavassistProxyFactory is its
      * default implementation
+     * {@link ProxyFactory}实现将生成导出的服务代理，JavassistProxyFactory是其默认实现
      */
     private static final ProxyFactory PROXY_FACTORY = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
 
@@ -180,6 +181,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
     }
 
     public synchronized void export() {
+        // 如果 export 为 false，则不导出服务
         if (!shouldExport()) {
             return;
         }
@@ -188,7 +190,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
             bootstrap = DubboBootstrap.getInstance();
             bootstrap.init();
         }
-
+        //checkAndUpdateSubConfigs方法用来检测一些必要的属性和设置一些默认值，
         checkAndUpdateSubConfigs();
 
         //init serviceMetadata
@@ -199,6 +201,8 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         serviceMetadata.setServiceInterfaceName(getInterface());
         serviceMetadata.setTarget(getRef());
 
+        // delay > 0，延时导出服务
+        // shouldDelay方法代表是否@Service(delay>0)或者设置了全局属性dubbo.provider.delay
         if (shouldDelay()) {
             DELAY_EXPORT_EXECUTOR.schedule(this::doExport, getDelay(), TimeUnit.MILLISECONDS);
         } else {
@@ -206,52 +210,79 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         }
     }
 
+    /**
+     *
+     * 检测 <dubbo:service> 标签的 interface 属性合法性，不合法则抛出异常
+     * 检测 ProviderConfig、ApplicationConfig 等核心配置类对象是否为空，若为空，则尝试从其他配置类对象中获取相应的实例。
+     * 检测并处理泛化服务和普通服务类
+     * 检测本地存根配置，并进行相应的处理
+     * 对 ApplicationConfig、RegistryConfig 等配置类进行检测，为空则尝试创建，若无法创建则抛出异常
+     */
     private void checkAndUpdateSubConfigs() {
         // Use default configs defined explicitly on global scope
+        // 用于检测 provider、application 等核心配置类对象是否为空，
+        // 若为空，则尝试从其他配置类对象中获取相应的实例。
         completeCompoundConfigs();
+        // 检测 provider 是否为空，为空则新建一个，并通过系统变量为其初始化
         checkDefault();
+        // 检查ProtocolConfig配置，未配置使用provider.getProtocols()或创建一个默认的
         checkProtocol();
         // if protocol is not injvm checkRegistry
+        // 如果协议不是injvm checkRegistry
         if (!isOnlyInJvm()) {
+            // 检查注册表配置是否存在，然后将其转换为RegistryConfig
             checkRegistry();
         }
+        // 刷新ServiceConfig配置
         this.refresh();
-
+        // 服务接口名不能为空，否则抛出异常
         if (StringUtils.isEmpty(interfaceName)) {
             throw new IllegalStateException("<dubbo:service interface=\"\" /> interface not allow null!");
         }
-
+        // 检测 ref 是否为泛化服务类型
         if (ref instanceof GenericService) {
+            // 设置 interfaceClass 为 GenericService.class
             interfaceClass = GenericService.class;
             if (StringUtils.isEmpty(generic)) {
+                // 设置 generic = "true"
                 generic = Boolean.TRUE.toString();
             }
+            // ref 非 GenericService 类型
         } else {
             try {
+                // 获得接口类型
                 interfaceClass = Class.forName(interfaceName, true, Thread.currentThread()
                         .getContextClassLoader());
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+            // 对 interfaceClass，以及 <dubbo:method> 标签中的必要字段进行检查
             checkInterfaceAndMethods(interfaceClass, getMethods());
+            // 对 ref 合法性进行检测
             checkRef();
+            // 设置 generic = "false"
             generic = Boolean.FALSE.toString();
         }
+        // local 和 stub 在功能应该是一致的，用于配置本地存根
         if (local != null) {
             if ("true".equals(local)) {
                 local = interfaceName + "Local";
             }
             Class<?> localClass;
             try {
+                // 获取本地存根类
                 localClass = ClassUtils.forNameWithThreadContextClassLoader(local);
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+            // 检测本地存根类是否可赋值给接口类，若不可赋值则会抛出异常，提醒使用者本地存根类类型不合法
             if (!interfaceClass.isAssignableFrom(localClass)) {
                 throw new IllegalStateException("The local implementation class " + localClass.getName() + " not implement interface " + interfaceName);
             }
         }
+
         if (stub != null) {
+            // 此处的代码和上一个 if 分支的代码基本一致，这里省略
             if ("true".equals(stub)) {
                 stub = interfaceName + "Stub";
             }
@@ -265,7 +296,9 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
                 throw new IllegalStateException("The stub implementation class " + stubClass.getName() + " not implement interface " + interfaceName);
             }
         }
+        // 检测各种对象是否为空，为空则新建，或者抛出异常
         checkStubAndLocal(interfaceClass);
+        // mock合法性校验
         ConfigValidationUtils.checkMock(interfaceClass, this);
         ConfigValidationUtils.validateServiceConfig(this);
         appendParameters();
@@ -280,13 +313,15 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
             return;
         }
         exported = true;
-
+        // 检测 interfaceName 是否合法
         if (StringUtils.isEmpty(path)) {
             path = interfaceName;
         }
+        // 导出服务
         doExportUrls();
 
         // dispatch a ServiceConfigExportedEvent since 2.7.4
+        // 从2.7.4版本开始分派ServiceConfigExportedEvent
         dispatch(new ServiceConfigExportedEvent(this));
     }
 
@@ -301,7 +336,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
                 this,
                 serviceMetadata
         );
-
+        // 加载注册中心链接
         List<URL> registryURLs = ConfigValidationUtils.loadRegistries(this, true);
 
         for (ProtocolConfig protocolConfig : protocols) {

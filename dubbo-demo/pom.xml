@@ -40,6 +40,7 @@
         <module>dubbo-call-sc</module>
         <module>dubbo-call-scdubbo</module>
         <module>sc-call-dubbo</module>
+        <module>dubbo-zzq-demo</module>
     </modules>
 
     <dependencyManagement>
